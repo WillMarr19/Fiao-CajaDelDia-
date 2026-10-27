@@ -1,58 +1,84 @@
 package com.williammarrugo.fiao.ui.theme
 
-import android.app.Activity
-import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.runtime.CompositionLocalProvider
 
-private val DarkColorScheme = darkColorScheme(
-    primary = Purple80,
-    secondary = PurpleGrey80,
-    tertiary = Pink80
+private val EsquemaClaro = lightColorScheme(
+    primary = TealProfundo,
+    onPrimary = SuperficieClara,
+    primaryContainer = TealMuyClaro,
+    onPrimaryContainer = TealProfundo,
+    secondary = TealMedio,
+    onSecondary = SuperficieClara,
+    secondaryContainer = TealClaro,
+    onSecondaryContainer = TealProfundo,
+    background = FondoClaro,
+    onBackground = TintaFuerte,
+    surface = SuperficieClara,
+    onSurface = TintaFuerte,
+    surfaceVariant = TealMuyClaro,
+    onSurfaceVariant = TintaSuave,
+    outline = BordeClaro,
+    outlineVariant = BordeClaro,
+    error = TerracotaGasto,
+    onError = SuperficieClara,
+    errorContainer = TerracotaGastoSuave,
+    onErrorContainer = TerracotaGasto
 )
 
-private val LightColorScheme = lightColorScheme(
-    primary = Purple40,
-    secondary = PurpleGrey40,
-    tertiary = Pink40
-
-    /* Other default colors to override
-    background = Color(0xFFFFFBFE),
-    surface = Color(0xFFFFFBFE),
-    onPrimary = Color.White,
-    onSecondary = Color.White,
-    onTertiary = Color.White,
-    onBackground = Color(0xFF1C1B1F),
-    onSurface = Color(0xFF1C1B1F),
-    */
+private val EsquemaOscuro = darkColorScheme(
+    primary = TealClaro,
+    onPrimary = TealMuyOscuro,
+    primaryContainer = TealContenedorOscuro,
+    onPrimaryContainer = TealClaro,
+    secondary = TealMedio,
+    onSecondary = TintaClara,
+    secondaryContainer = TealContenedorOscuro,
+    onSecondaryContainer = TealClaro,
+    background = FondoOscuro,
+    onBackground = TintaClara,
+    surface = SuperficieOscura,
+    onSurface = TintaClara,
+    surfaceVariant = TealContenedorOscuro,
+    onSurfaceVariant = TintaClaraSuave,
+    outline = BordeOscuro,
+    outlineVariant = BordeOscuro,
+    error = TerracotaGastoOscuro,
+    onError = FondoOscuro,
+    errorContainer = TerracotaGastoSuaveOscuro,
+    onErrorContainer = TerracotaGastoOscuro
 )
 
+/**
+ * Tema de la app.
+ *
+ * Decisión deliberada: NO se usa dynamic color (Material You), aunque el
+ * dispositivo lo soporte. Dynamic color toma los colores del fondo de
+ * pantalla del usuario y reemplazaría toda la paleta, con lo cual el verde
+ * de "venta" y el ocre de "fiado" podrían volverse indistinguibles.
+ * Cuando el color carga información, no se puede delegar al fondo de
+ * pantalla.
+ *
+ * La plantilla de Android Studio trae dynamic color activado; aquí se
+ * quitó a propósito.
+ */
 @Composable
 fun FiaoTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
-    // Dynamic color is available on Android 12+
-    dynamicColor: Boolean = true,
+    enOscuro: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit
 ) {
-    val colorScheme = when {
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-            val context = LocalContext.current
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        }
+    val esquema = if (enOscuro) EsquemaOscuro else EsquemaClaro
+    val coloresFiao = if (enOscuro) coloresFiaoOscuro else coloresFiaoClaro
 
-        darkTheme -> DarkColorScheme
-        else -> LightColorScheme
+    CompositionLocalProvider(LocalColoresFiao provides coloresFiao) {
+        MaterialTheme(
+            colorScheme = esquema,
+            typography = Tipografia,
+            content = content
+        )
     }
-
-    MaterialTheme(
-        colorScheme = colorScheme,
-        typography = Typography,
-        content = content
-    )
 }
