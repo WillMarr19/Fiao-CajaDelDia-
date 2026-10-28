@@ -2,39 +2,49 @@ package com.williammarrugo.fiao.ui.navegacion
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import com.williammarrugo.fiao.domain.model.DatosDemo
+import com.williammarrugo.fiao.ui.FabricaViewModels
 import com.williammarrugo.fiao.ui.clientes.ClienteDetalleScreen
+import com.williammarrugo.fiao.ui.clientes.ClienteDetalleViewModel
 import com.williammarrugo.fiao.ui.clientes.ClienteFormScreen
+import com.williammarrugo.fiao.ui.clientes.ClienteFormViewModel
 import com.williammarrugo.fiao.ui.clientes.ClientesScreen
-import com.williammarrugo.fiao.ui.clientes.EstadoFormularioCliente
+import com.williammarrugo.fiao.ui.clientes.ClientesViewModel
 import com.williammarrugo.fiao.ui.inicio.InicioScreen
-import com.williammarrugo.fiao.ui.movimientos.EstadoFormularioMovimiento
+import com.williammarrugo.fiao.ui.inicio.InicioViewModel
 import com.williammarrugo.fiao.ui.movimientos.MovimientoFormScreen
+import com.williammarrugo.fiao.ui.movimientos.MovimientoFormViewModel
 import com.williammarrugo.fiao.ui.movimientos.MovimientosScreen
+import com.williammarrugo.fiao.ui.movimientos.MovimientosViewModel
 import com.williammarrugo.fiao.ui.resumen.ResumenScreen
-import java.time.LocalDate
+import com.williammarrugo.fiao.domain.model.DatosDemo
 
 /**
- * El grafo de navegación.
+ * El grafo de navegación, ya conectado a la base de datos.
  *
- * Por ahora todas las pantallas se alimentan de DatosDemo y los
- * formularios guardan su estado aquí mismo con remember. Es un andamio:
- * sirve para recorrer la app completa en el celular antes de que exista
- * la base de datos.
+ * Este archivo es la costura entre dos mundos: arriba los ViewModel,
+ * que saben de datos, y abajo las pantallas, que solo saben dibujar.
  *
- * Cuando lleguen los ViewModel (día 6) y Room (día 7), lo único que
- * cambia es de dónde salen los datos. Las pantallas no se tocan, porque
- * ninguna sabe quién se los pasa.
+ * Dos funciones aparecen en todos los destinos:
+ *
+ * - `viewModel(factory = ...)` pide el ViewModel. Si ya existe uno para
+ *   este destino lo reutiliza; si no, lo crea con la fábrica. Por eso
+ *   al rotar el celular no se pierde el estado: la Activity se
+ *   reconstruye pero el ViewModel sigue siendo el mismo.
+ *
+ * - `collectAsStateWithLifecycle()` suscribe la pantalla al StateFlow.
+ *   La parte "WithLifecycle" importa: cuando la app pasa a segundo
+ *   plano, deja de escuchar, y así no se gasta batería recalculando
+ *   una pantalla que nadie ve. Es la versión correcta en Android de
+ *   `collectAsState()`.
  */
 @Composable
 fun FiaoNavHost(
@@ -48,17 +58,16 @@ fun FiaoNavHost(
     ) {
 
         composable(Rutas.INICIO) {
+            val vm: InicioViewModel = viewModel(factory = FabricaViewModels.Factory)
+            val estado by vm.uiState.collectAsStateWithLifecycle()
+
             InicioScreen(
-                resumen = DatosDemo.resumenHoy,
-                movimientos = DatosDemo.movimientos,
-                totalPorCobrar = DatosDemo.totalPorCobrar,
-                clientesQueDeben = DatosDemo.clientesQueDeben,
-                onNuevoMovimiento = {
-                    navController.navigate(Rutas.movimientoForm())
-                },
-                onMovimientoClick = { id ->
-                    navController.navigate(Rutas.movimientoForm(id))
-                },
+                resumen = estado.resumen,
+                movimientos = estado.movimientos,
+                totalPorCobrar = estado.totalPorCobrar,
+                clientesQueDeben = estado.clientesQueDeben,
+                onNuevoMovimiento = { navController.navigate(Rutas.movimientoForm()) },
+                onMovimientoClick = { id -> navController.navigate(Rutas.movimientoForm(id)) },
                 onVerMovimientos = { navController.navigate(Rutas.MOVIMIENTOS) },
                 onVerClientes = { navController.navigate(Rutas.CLIENTES) },
                 onVerResumen = { navController.navigate(Rutas.RESUMEN) }
@@ -66,12 +75,13 @@ fun FiaoNavHost(
         }
 
         composable(Rutas.MOVIMIENTOS) {
+            val vm: MovimientosViewModel = viewModel(factory = FabricaViewModels.Factory)
+            val estado by vm.uiState.collectAsStateWithLifecycle()
+
             MovimientosScreen(
-                fecha = LocalDate.now(),
-                resumen = DatosDemo.resumenHoy,
-                movimientos = DatosDemo.movimientos,
+                estado = estado,
                 onVolver = { navController.popBackStack() },
-                onCambiarFecha = { /* El selector de fecha llega el día 8 */ },
+                onCambiarFecha = vm::cambiarDia,
                 onNuevoMovimiento = { navController.navigate(Rutas.movimientoForm()) },
                 onMovimientoClick = { id -> navController.navigate(Rutas.movimientoForm(id)) }
             )
@@ -82,48 +92,34 @@ fun FiaoNavHost(
             arguments = listOf(
                 navArgument(Rutas.ARG_MOVIMIENTO_ID) {
                     type = NavType.LongType
-                    defaultValue = -1L
+                    defaultValue = MovimientoFormViewModel.SIN_ID
                 }
             )
-        ) { entrada ->
-            val id = entrada.arguments?.getLong(Rutas.ARG_MOVIMIENTO_ID) ?: -1L
-            val existente = DatosDemo.movimientos.firstOrNull { it.id == id }
-
-            var estado by remember(id) {
-                mutableStateOf(
-                    EstadoFormularioMovimiento(
-                        tipo = existente?.tipo ?: EstadoFormularioMovimiento().tipo,
-                        monto = existente?.monto,
-                        descripcion = existente?.descripcion.orEmpty()
-                    )
-                )
-            }
+        ) {
+            val vm: MovimientoFormViewModel = viewModel(factory = FabricaViewModels.Factory)
+            val estado by vm.uiState.collectAsStateWithLifecycle()
 
             MovimientoFormScreen(
                 estado = estado,
-                esEdicion = existente != null,
-                onTipoCambia = { estado = estado.copy(tipo = it) },
-                onMontoCambia = { estado = estado.copy(monto = it, errorMonto = null) },
-                onDescripcionCambia = {
-                    estado = estado.copy(descripcion = it, errorDescripcion = null)
-                },
-                onGuardar = { navController.popBackStack() },
-                onEliminar = { navController.popBackStack() },
-                onVolver = { navController.popBackStack() }
+                onTipoCambia = vm::cambiarTipo,
+                onMontoCambia = vm::cambiarMonto,
+                onDescripcionCambia = vm::cambiarDescripcion,
+                onGuardar = vm::guardar,
+                onEliminar = vm::eliminar,
+                onVolver = { navController.popBackStack() },
+                onErrorMostrado = vm::errorMostrado
             )
         }
 
         composable(Rutas.CLIENTES) {
-            var busqueda by remember { mutableStateOf("") }
-            val lista = DatosDemo.clientes
-                .filter { it.cliente.nombre.contains(busqueda, ignoreCase = true) }
-                .sortedByDescending { it.saldo }
+            val vm: ClientesViewModel = viewModel(factory = FabricaViewModels.Factory)
+            val estado by vm.uiState.collectAsStateWithLifecycle()
 
             ClientesScreen(
-                clientes = lista,
-                totalPorCobrar = DatosDemo.totalPorCobrar,
-                busqueda = busqueda,
-                onBusquedaCambia = { busqueda = it },
+                clientes = estado.clientes,
+                totalPorCobrar = estado.totalPorCobrar,
+                busqueda = estado.busqueda,
+                onBusquedaCambia = vm::cambiarBusqueda,
                 onVolver = { navController.popBackStack() },
                 onClienteClick = { id -> navController.navigate(Rutas.clienteDetalle(id)) },
                 onNuevoCliente = { navController.navigate(Rutas.clienteForm()) }
@@ -136,20 +132,25 @@ fun FiaoNavHost(
                 navArgument(Rutas.ARG_CLIENTE_ID) { type = NavType.LongType }
             )
         ) { entrada ->
-            val id = entrada.arguments?.getLong(Rutas.ARG_CLIENTE_ID) ?: return@composable
-            val item = DatosDemo.clientes.firstOrNull { it.cliente.id == id }
-                ?: return@composable
+            val vm: ClienteDetalleViewModel = viewModel(factory = FabricaViewModels.Factory)
+            val estado by vm.uiState.collectAsStateWithLifecycle()
+            val cliente = estado.cliente
+            val id = entrada.arguments?.getLong(Rutas.ARG_CLIENTE_ID) ?: 0L
 
-            ClienteDetalleScreen(
-                cliente = item.cliente,
-                saldo = item.saldo,
-                historial = DatosDemo.historialCliente,
-                onVolver = { navController.popBackStack() },
-                onEditar = { navController.navigate(Rutas.clienteForm(id)) },
-                onFiar = { /* Hoja de registro de fiado: día 9 */ },
-                onAbonar = { /* Hoja de registro de abono: día 10 */ },
-                onRecordar = { /* Intent de WhatsApp: día 10 */ }
-            )
+            // Mientras la consulta no responde, cliente es null. No se
+            // dibuja nada en vez de inventar un cliente vacío.
+            if (cliente != null) {
+                ClienteDetalleScreen(
+                    cliente = cliente,
+                    saldo = estado.saldo,
+                    historial = estado.historial,
+                    onVolver = { navController.popBackStack() },
+                    onEditar = { navController.navigate(Rutas.clienteForm(id)) },
+                    onFiar = { /* F7: pendiente */ },
+                    onAbonar = { /* F8: pendiente */ },
+                    onRecordar = { /* F12: pendiente */ }
+                )
+            }
         }
 
         composable(
@@ -157,35 +158,27 @@ fun FiaoNavHost(
             arguments = listOf(
                 navArgument(Rutas.ARG_CLIENTE_ID) {
                     type = NavType.LongType
-                    defaultValue = -1L
+                    defaultValue = ClienteFormViewModel.SIN_ID
                 }
             )
-        ) { entrada ->
-            val id = entrada.arguments?.getLong(Rutas.ARG_CLIENTE_ID) ?: -1L
-            val existente = DatosDemo.clientes.firstOrNull { it.cliente.id == id }
-
-            var estado by remember(id) {
-                mutableStateOf(
-                    EstadoFormularioCliente(
-                        nombre = existente?.cliente?.nombre.orEmpty(),
-                        telefono = existente?.cliente?.telefono.orEmpty(),
-                        puedeEliminar = (existente?.saldo ?: 0L) == 0L
-                    )
-                )
-            }
+        ) {
+            val vm: ClienteFormViewModel = viewModel(factory = FabricaViewModels.Factory)
+            val estado by vm.uiState.collectAsStateWithLifecycle()
 
             ClienteFormScreen(
                 estado = estado,
-                esEdicion = existente != null,
-                onNombreCambia = { estado = estado.copy(nombre = it, errorNombre = null) },
-                onTelefonoCambia = { estado = estado.copy(telefono = it) },
-                onGuardar = { navController.popBackStack() },
-                onEliminar = { navController.popBackStack() },
-                onVolver = { navController.popBackStack() }
+                onNombreCambia = vm::cambiarNombre,
+                onTelefonoCambia = vm::cambiarTelefono,
+                onGuardar = vm::guardar,
+                onEliminar = vm::eliminar,
+                onVolver = { navController.popBackStack() },
+                onErrorMostrado = vm::errorMostrado
             )
         }
 
         composable(Rutas.RESUMEN) {
+            // F13 todavía usa datos de ejemplo: el resumen semanal
+            // llega el día 11 del plan.
             ResumenScreen(
                 dias = DatosDemo.semana,
                 onVolver = { navController.popBackStack() }

@@ -1,28 +1,36 @@
 package com.williammarrugo.fiao.ui.clientes
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -32,43 +40,50 @@ import com.williammarrugo.fiao.ui.componentes.BarraSuperior
 import com.williammarrugo.fiao.ui.componentes.CampoTexto
 import com.williammarrugo.fiao.ui.theme.FiaoTheme
 
-data class EstadoFormularioCliente(
-    val nombre: String = "",
-    val telefono: String = "",
-    val errorNombre: String? = null,
-    /** Regla R6: no se borra un cliente que todavía debe. */
-    val puedeEliminar: Boolean = true
-)
-
 /**
- * Crear o editar un cliente.
+ * Crear y editar clientes (F6).
  *
- * Solo dos campos. Pedir más (cédula, dirección, correo) alargaría el
- * formulario sin que el tendero vaya a llenarlos, y el objetivo es
- * poder anotar un fiado en segundos mientras el cliente espera.
+ * El botón de eliminar solo aparece si el cliente no debe nada
+ * (regla R6). Cuando debe, en lugar del botón se muestra una
+ * explicación: esconder un control sin decir por qué deja al usuario
+ * pensando que la app está rota.
  */
 @Composable
 fun ClienteFormScreen(
-    estado: EstadoFormularioCliente,
-    esEdicion: Boolean,
+    estado: ClienteFormUiState,
     onNombreCambia: (String) -> Unit,
     onTelefonoCambia: (String) -> Unit,
     onGuardar: () -> Unit,
     onEliminar: () -> Unit,
     onVolver: () -> Unit,
+    onErrorMostrado: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var mostrandoDialogo by rememberSaveable { mutableStateOf(false) }
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(estado.guardado, estado.eliminado) {
+        if (estado.guardado || estado.eliminado) onVolver()
+    }
+
+    LaunchedEffect(estado.errorGeneral) {
+        val mensaje = estado.errorGeneral
+        if (mensaje != null) {
+            snackbarHostState.showSnackbar(mensaje)
+            onErrorMostrado()
+        }
+    }
 
     Scaffold(
         modifier = modifier,
         containerColor = MaterialTheme.colorScheme.background,
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             BarraSuperior(
-                titulo = if (esEdicion) "Editar cliente" else "Nuevo cliente",
+                titulo = if (estado.esEdicion) "Editar cliente" else "Nuevo cliente",
                 onVolver = onVolver,
                 acciones = {
-                    if (esEdicion && estado.puedeEliminar) {
+                    if (estado.esEdicion && estado.puedeEliminar) {
                         IconButton(onClick = { mostrandoDialogo = true }) {
                             Icon(
                                 imageVector = Icons.Default.Delete,
@@ -107,17 +122,28 @@ fun ClienteFormScreen(
 
             Button(
                 onClick = onGuardar,
+                enabled = !estado.guardando,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp)
             ) {
-                Text(
-                    text = if (esEdicion) "Guardar cambios" else "Agregar cliente",
-                    style = MaterialTheme.typography.labelLarge
-                )
+                if (estado.guardando) {
+                    Box(contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(22.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
+                    }
+                } else {
+                    Text(
+                        text = if (estado.esEdicion) "Guardar cambios" else "Agregar cliente",
+                        style = MaterialTheme.typography.labelLarge
+                    )
+                }
             }
 
-            if (esEdicion && !estado.puedeEliminar) {
+            if (estado.esEdicion && !estado.puedeEliminar) {
                 Text(
                     text = "Este cliente no se puede eliminar mientras tenga saldo pendiente.",
                     style = MaterialTheme.typography.bodyMedium,
@@ -152,17 +178,18 @@ fun ClienteFormScreen(
 private fun ClienteFormPreview() {
     FiaoTheme {
         ClienteFormScreen(
-            estado = EstadoFormularioCliente(
+            estado = ClienteFormUiState(
+                esEdicion = true,
                 nombre = "Rosa Herrera",
                 telefono = "3001234567",
                 puedeEliminar = false
             ),
-            esEdicion = true,
             onNombreCambia = {},
             onTelefonoCambia = {},
             onGuardar = {},
             onEliminar = {},
-            onVolver = {}
+            onVolver = {},
+            onErrorMostrado = {}
         )
     }
 }

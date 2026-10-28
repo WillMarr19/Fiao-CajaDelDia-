@@ -1,29 +1,36 @@
 package com.williammarrugo.fiao.ui.movimientos
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.tooling.preview.Preview
@@ -36,50 +43,64 @@ import com.williammarrugo.fiao.ui.componentes.SelectorTipo
 import com.williammarrugo.fiao.ui.theme.FiaoTheme
 
 /**
- * Estado del formulario.
+ * Crear (F1), editar y eliminar (F3) un movimiento.
  *
- * Está aparte de los composables porque, cuando llegue el ViewModel en
- * el día 6, esta clase se muda allá tal cual y la pantalla no cambia.
- * Esa es la idea de "state hoisting": la pantalla dibuja, otro decide.
- */
-data class EstadoFormularioMovimiento(
-    val tipo: TipoMovimiento = TipoMovimiento.VENTA,
-    val monto: Long? = null,
-    val descripcion: String = "",
-    val errorMonto: String? = null,
-    val errorDescripcion: String? = null
-)
-
-/**
- * Crear o editar un movimiento.
+ * La pantalla sigue sin saber nada de bases de datos: recibe el estado
+ * y reporta lo que hace el usuario. Lo nuevo respecto a la versión del
+ * armazón son tres cosas:
  *
- * La misma pantalla sirve para las dos cosas: si llega un id, edita;
- * si no, crea. Lo único que cambia es el título y la presencia del
- * botón de borrar.
+ * - `LaunchedEffect` observa `guardado` y `eliminado` para navegar
+ *   hacia atrás cuando la operación termina.
+ * - Un indicador de progreso mientras escribe en disco.
+ * - Un Snackbar para los errores que no son de un campo concreto.
  */
 @Composable
 fun MovimientoFormScreen(
-    estado: EstadoFormularioMovimiento,
-    esEdicion: Boolean,
+    estado: MovimientoFormUiState,
     onTipoCambia: (TipoMovimiento) -> Unit,
     onMontoCambia: (Long?) -> Unit,
     onDescripcionCambia: (String) -> Unit,
     onGuardar: () -> Unit,
     onEliminar: () -> Unit,
     onVolver: () -> Unit,
+    onErrorMostrado: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var mostrandoDialogo by rememberSaveable { mutableStateOf(false) }
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    /**
+     * LaunchedEffect corre su bloque cuando la clave cambia.
+     *
+     * Aquí la clave es el par (guardado, eliminado): en cuanto el
+     * ViewModel pone alguno en true, se navega hacia atrás. Es la forma
+     * de reaccionar a un cambio de estado sin hacerlo durante el
+     * dibujado, que en Compose es un error: el cuerpo de un composable
+     * puede ejecutarse muchas veces y navegar ahí dispararía varias
+     * navegaciones.
+     */
+    LaunchedEffect(estado.guardado, estado.eliminado) {
+        if (estado.guardado || estado.eliminado) onVolver()
+    }
+
+    LaunchedEffect(estado.errorGeneral) {
+        val mensaje = estado.errorGeneral
+        if (mensaje != null) {
+            snackbarHostState.showSnackbar(mensaje)
+            onErrorMostrado()
+        }
+    }
 
     Scaffold(
         modifier = modifier,
         containerColor = MaterialTheme.colorScheme.background,
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             BarraSuperior(
-                titulo = if (esEdicion) "Editar movimiento" else "Nuevo movimiento",
+                titulo = if (estado.esEdicion) "Editar movimiento" else "Nuevo movimiento",
                 onVolver = onVolver,
                 acciones = {
-                    if (esEdicion) {
+                    if (estado.esEdicion) {
                         IconButton(onClick = { mostrandoDialogo = true }) {
                             Icon(
                                 imageVector = Icons.Default.Delete,
@@ -121,14 +142,28 @@ fun MovimientoFormScreen(
 
             Button(
                 onClick = onGuardar,
+                enabled = !estado.guardando,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp)
             ) {
-                Text(
-                    text = if (esEdicion) "Guardar cambios" else "Registrar",
-                    style = MaterialTheme.typography.labelLarge
-                )
+                if (estado.guardando) {
+                    // Mientras escribe en disco: el botón se desactiva
+                    // y muestra actividad, para que nadie toque dos
+                    // veces y queden dos movimientos iguales.
+                    Box(contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(22.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
+                    }
+                } else {
+                    Text(
+                        text = if (estado.esEdicion) "Guardar cambios" else "Registrar",
+                        style = MaterialTheme.typography.labelLarge
+                    )
+                }
             }
         }
     }
@@ -147,9 +182,7 @@ fun MovimientoFormScreen(
                 ) { Text("Eliminar") }
             },
             dismissButton = {
-                TextButton(onClick = { mostrandoDialogo = false }) {
-                    Text("Cancelar")
-                }
+                TextButton(onClick = { mostrandoDialogo = false }) { Text("Cancelar") }
             }
         )
     }
@@ -159,16 +192,15 @@ fun MovimientoFormScreen(
 @Composable
 private fun MovimientoFormPreview() {
     FiaoTheme {
-        var estado by remember { mutableStateOf(EstadoFormularioMovimiento()) }
         MovimientoFormScreen(
-            estado = estado,
-            esEdicion = false,
-            onTipoCambia = { estado = estado.copy(tipo = it) },
-            onMontoCambia = { estado = estado.copy(monto = it) },
-            onDescripcionCambia = { estado = estado.copy(descripcion = it) },
+            estado = MovimientoFormUiState(monto = 12_000, descripcion = "Gaseosas"),
+            onTipoCambia = {},
+            onMontoCambia = {},
+            onDescripcionCambia = {},
             onGuardar = {},
             onEliminar = {},
-            onVolver = {}
+            onVolver = {},
+            onErrorMostrado = {}
         )
     }
 }
@@ -178,20 +210,19 @@ private fun MovimientoFormPreview() {
 private fun MovimientoFormErrorPreview() {
     FiaoTheme {
         MovimientoFormScreen(
-            estado = EstadoFormularioMovimiento(
+            estado = MovimientoFormUiState(
+                esEdicion = true,
                 tipo = TipoMovimiento.GASTO,
-                monto = null,
-                descripcion = "",
-                errorMonto = "Escribe un monto mayor que cero",
-                errorDescripcion = "Falta decir de qué fue"
+                errorMonto = "El monto debe ser mayor que cero",
+                errorDescripcion = "Escribe de qué fue"
             ),
-            esEdicion = true,
             onTipoCambia = {},
             onMontoCambia = {},
             onDescripcionCambia = {},
             onGuardar = {},
             onEliminar = {},
-            onVolver = {}
+            onVolver = {},
+            onErrorMostrado = {}
         )
     }
 }
