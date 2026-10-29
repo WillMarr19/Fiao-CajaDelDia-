@@ -9,43 +9,43 @@ nunca cuadra con la primera. Fiao junta las dos cosas y responde de un
 vistazo las dos preguntas que importan: **cuánto hice hoy** y **quién me
 debe**.
 
-\---
+---
 
 ## Capturas
 
-|Inicio|Registrar|Clientes|
-|-|-|-|
-|!\[Inicio](docs/MainView.jpeg)|!\[Registrar](docs/RegistroEntrada.jpeg)|!\[Clientes](docs/PestanaClientes.jpeg)|
+| Inicio | Registrar | Clientes |
+|---|---|---|
+| ![Inicio](docs/MainView.jpeg) | ![Registrar](docs/RegistroEntrada.jpeg) | ![Clientes](docs/PestanaClientes.jpeg) |
 
-\---
+---
 
 ## Qué hace
 
-|Estado|Función|
-|-|-|
-|Listo|Registrar ventas y gastos, con validación|
-|Listo|Ver los movimientos del día y el balance|
-|Listo|Editar y eliminar movimientos|
-|Listo|Consultar cualquier día con un calendario|
-|Listo|Crear, editar y eliminar clientes|
-|Listo|Registrar fiados y abonos, con control de sobrepago|
-|Listo|Saldo e historial por cliente|
-|Listo|Recordatorio de cobro por WhatsApp|
-|Listo|Persistencia local: los datos sobreviven al cierre|
-|Pendiente|Resumen semanal con datos reales|
+| Estado | Función |
+|---|---|
+| Listo | Registrar ventas y gastos, con validación |
+| Listo | Ver los movimientos del día y el balance |
+| Listo | Editar y eliminar movimientos |
+| Listo | Consultar cualquier día con un calendario |
+| Listo | Crear, editar y eliminar clientes |
+| Listo | Registrar fiados y abonos, con control de sobrepago |
+| Listo | Saldo e historial por cliente |
+| Listo | Recordatorio de cobro por WhatsApp |
+| Listo | Persistencia local: los datos sobreviven al cierre |
+| Pendiente | Resumen semanal con datos reales |
 
-\---
+---
 
 ## Stack
 
-* **Kotlin** y **Jetpack Compose** con Material 3
-* **Room** para persistencia local
-* **Coroutines** y **Flow** para datos reactivos
-* **Navigation Compose**
-* **JUnit** para las pruebas del dominio
-* SDK mínimo 26, sin dependencias de servicios externos
+- **Kotlin** y **Jetpack Compose** con Material 3
+- **Room** para persistencia local
+- **Coroutines** y **Flow** para datos reactivos
+- **Navigation Compose**
+- **JUnit** para las pruebas del dominio
+- SDK mínimo 26, sin dependencias de servicios externos
 
-\---
+---
 
 ## Arquitectura
 
@@ -69,11 +69,11 @@ sitio de la app que sabe que los datos vienen de SQLite.
 
 Eso tiene dos consecuencias prácticas:
 
-* Las reglas de negocio se prueban con JUnit en milisegundos, sin
-emulador, porque son funciones puras.
-* Cambiar el origen de los datos (un backend, otra base) implica
-escribir otra implementación de las mismas interfaces, sin tocar
-ViewModels ni pantallas.
+- Las reglas de negocio se prueban con JUnit en milisegundos, sin
+  emulador, porque son funciones puras.
+- Cambiar el origen de los datos (un backend, otra base) implica
+  escribir otra implementación de las mismas interfaces, sin tocar
+  ViewModels ni pantallas.
 
 ### Flujo de datos
 
@@ -106,7 +106,7 @@ El dinero se guarda como `Long` en pesos enteros, nunca como `Double`:
 un `Double` no representa 0,1 de forma exacta y el error se acumula al
 sumar, con lo que la caja no cuadraría.
 
-\---
+---
 
 ## Decisiones de diseño
 
@@ -136,7 +136,7 @@ fuera otra pantalla, el usuario tendría que recordar la cifra.
 cliente se llevó mercancía. Si hubo un error, lo correcto es registrar
 un ajuste, no hacer desaparecer el registro.
 
-\---
+---
 
 ## Cómo compilarlo
 
@@ -158,7 +158,7 @@ ni cuentas: la app funciona sin conexión y sin servicios externos.
 ./gradlew test
 ```
 
-\---
+---
 
 ## Uso de IA
 
@@ -166,19 +166,18 @@ Usé IA (Claude) para acelerar parte de la implementación. El alcance,
 el modelo de dominio, las reglas de negocio y las decisiones de
 producto son míos, y reviso el código que entra al repositorio.
 
-\---
+---
 
 ## Qué sigue
 
-* Resumen semanal con datos reales
-* Pruebas de los ViewModels
-* Ajustes de diseño en orientación horizontal
-* Sincronización opcional con un backend
+- Resumen semanal con datos reales
+- Pruebas de los ViewModels
+- Ajustes de diseño en orientación horizontal
+- Sincronización opcional con un backend
 
-\---
+---
 
 ## Autor
 
 **William E. Marrugo Ruiz** — Cartagena de Indias, Colombia
 [GitHub](https://github.com/WillMarr19)
-
