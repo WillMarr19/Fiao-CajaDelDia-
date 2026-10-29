@@ -4,6 +4,7 @@ import com.williammarrugo.fiao.domain.model.Abono
 import com.williammarrugo.fiao.domain.model.Cliente
 import com.williammarrugo.fiao.domain.model.ClienteConSaldo
 import com.williammarrugo.fiao.domain.model.EntradaHistorial
+import com.williammarrugo.fiao.domain.model.Fiado
 import com.williammarrugo.fiao.domain.model.Movimiento
 import kotlinx.coroutines.flow.Flow
 import java.time.LocalDate
@@ -79,9 +80,29 @@ interface ClienteRepository {
     suspend fun eliminar(id: Long)
 }
 
+/**
+ * Fiados (F7).
+ *
+ * Solo tiene insertar y no actualizar ni eliminar, y eso es una
+ * decisión, no un olvido. Un fiado es un hecho que ocurrió: el cliente
+ * se llevó mercancía. Borrarlo falsearía la cuenta.
+ *
+ * Si hubo un error de digitación, lo correcto en contabilidad es
+ * registrar el ajuste, no hacer desaparecer el registro. Esa función
+ * podría agregarse más adelante como "corrección", que es distinto de
+ * un borrado.
+ */
+interface FiadoRepository {
+    fun observarPorCliente(clienteId: Long): Flow<List<Fiado>>
+    suspend fun insertar(fiado: Fiado): Long
+}
+
+/** Abonos (F8). Un abono también es un hecho: el cliente pagó. */
 interface AbonoRepository {
     /** Los abonos de un día. Entran al balance (regla R2). */
     fun observarPorDia(dia: LocalDate): Flow<List<Abono>>
+
+    fun observarPorCliente(clienteId: Long): Flow<List<Abono>>
 
     suspend fun insertar(abono: Abono): Long
 }

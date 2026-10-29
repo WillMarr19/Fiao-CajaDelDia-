@@ -3,10 +3,12 @@ package com.williammarrugo.fiao.di
 import android.content.Context
 import com.williammarrugo.fiao.data.AbonoRepositoryRoom
 import com.williammarrugo.fiao.data.ClienteRepositoryRoom
+import com.williammarrugo.fiao.data.FiadoRepositoryRoom
 import com.williammarrugo.fiao.data.MovimientoRepositoryRoom
 import com.williammarrugo.fiao.data.local.FiaoDatabase
 import com.williammarrugo.fiao.domain.repository.AbonoRepository
 import com.williammarrugo.fiao.domain.repository.ClienteRepository
+import com.williammarrugo.fiao.domain.repository.FiadoRepository
 import com.williammarrugo.fiao.domain.repository.MovimientoRepository
 
 /**
@@ -35,6 +37,7 @@ import com.williammarrugo.fiao.domain.repository.MovimientoRepository
 interface Contenedor {
     val movimientoRepository: MovimientoRepository
     val clienteRepository: ClienteRepository
+    val fiadoRepository: FiadoRepository
     val abonoRepository: AbonoRepository
 }
 
@@ -54,6 +57,10 @@ class ContenedorApp(private val context: Context) : Contenedor {
             fiadoDao = baseDeDatos.fiadoDao(),
             abonoDao = baseDeDatos.abonoDao()
         )
+    }
+
+    override val fiadoRepository: FiadoRepository by lazy {
+        FiadoRepositoryRoom(baseDeDatos.fiadoDao())
     }
 
     override val abonoRepository: AbonoRepository by lazy {

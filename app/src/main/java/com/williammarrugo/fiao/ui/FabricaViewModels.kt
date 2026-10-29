@@ -77,7 +77,9 @@ object FabricaViewModels {
         initializer {
             val contenedor = aplicacion().contenedor
             ClienteDetalleViewModel(
-                repository = contenedor.clienteRepository,
+                clienteRepository = contenedor.clienteRepository,
+                fiadoRepository = contenedor.fiadoRepository,
+                abonoRepository = contenedor.abonoRepository,
                 savedStateHandle = createSavedStateHandle()
             )
         }

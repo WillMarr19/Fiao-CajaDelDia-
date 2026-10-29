@@ -7,29 +7,42 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.williammarrugo.fiao.domain.model.Cliente
 import com.williammarrugo.fiao.domain.model.DatosDemo
 import com.williammarrugo.fiao.domain.model.EntradaHistorial
 import com.williammarrugo.fiao.ui.componentes.BarraSuperior
+import com.williammarrugo.fiao.ui.componentes.CampoMonto
+import com.williammarrugo.fiao.ui.componentes.CampoTexto
 import com.williammarrugo.fiao.ui.componentes.EstadoVacio
 import com.williammarrugo.fiao.ui.componentes.MontoTexto
 import com.williammarrugo.fiao.ui.componentes.SeparadorFila
@@ -38,6 +51,7 @@ import com.williammarrugo.fiao.ui.theme.FiaoTheme
 import com.williammarrugo.fiao.ui.theme.LocalColoresFiao
 import com.williammarrugo.fiao.ui.theme.estiloMontoFila
 import com.williammarrugo.fiao.ui.theme.estiloMontoHeroe
+import com.williammarrugo.fiao.util.aPesos
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -47,27 +61,46 @@ private val formatoFecha =
 /**
  * La cuenta de un cliente.
  *
- * El saldo manda, y debajo van las dos acciones que el tendero hace a
- * diario: fiar y abonar. Abonar es la acción principal (botón lleno)
- * porque es la que cierra el ciclo del negocio.
+ * El saldo manda, y debajo van las dos acciones del día a día: fiar y
+ * abonar. Abonar es la acción principal (botón lleno) porque cierra el
+ * ciclo del negocio.
+ *
+ * Ambas abren una hoja inferior en vez de navegar a otra pantalla. Es
+ * deliberado: al registrar un abono conviene seguir viendo el saldo
+ * detrás, que es contra lo que se valida. Si fuera otra pantalla, el
+ * usuario tendría que recordar la cifra.
  */
 @Composable
 fun ClienteDetalleScreen(
-    cliente: Cliente,
-    saldo: Long,
-    historial: List<EntradaHistorial>,
+    estado: ClienteDetalleUiState,
     onVolver: () -> Unit,
     onEditar: () -> Unit,
     onFiar: () -> Unit,
     onAbonar: () -> Unit,
     onRecordar: () -> Unit,
+    onMontoCambia: (Long?) -> Unit,
+    onDescripcionCambia: (String) -> Unit,
+    onConfirmar: () -> Unit,
+    onCerrarHoja: () -> Unit,
+    onMensajeMostrado: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val colores = LocalColoresFiao.current
+    val cliente = estado.cliente ?: return
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(estado.mensaje) {
+        val msg = estado.mensaje
+        if (msg != null) {
+            snackbarHostState.showSnackbar(msg)
+            onMensajeMostrado()
+        }
+    }
 
     Scaffold(
         modifier = modifier,
         containerColor = MaterialTheme.colorScheme.background,
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             BarraSuperior(
                 titulo = cliente.nombre,
@@ -91,14 +124,15 @@ fun ClienteDetalleScreen(
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Text(
-                        text = if (saldo > 0) "Debe" else "Está al día",
+                        text = if (estado.saldo > 0) "Debe" else "Está al día",
                         style = MaterialTheme.typography.bodyMedium,
                         color = colores.tintaSuave
                     )
                     MontoTexto(
-                        monto = saldo,
+                        monto = estado.saldo,
                         estilo = estiloMontoHeroe,
-                        color = if (saldo > 0) colores.fiado else MaterialTheme.colorScheme.onBackground
+                        color = if (estado.saldo > 0) colores.fiado
+                        else MaterialTheme.colorScheme.onBackground
                     )
 
                     Spacer(Modifier.height(18.dp))
@@ -109,7 +143,7 @@ fun ClienteDetalleScreen(
                             modifier = Modifier
                                 .weight(1f)
                                 .height(52.dp),
-                            enabled = saldo > 0
+                            enabled = estado.saldo > 0
                         ) { Text("Abonar") }
 
                         OutlinedButton(
@@ -120,7 +154,7 @@ fun ClienteDetalleScreen(
                         ) { Text("Fiar") }
                     }
 
-                    if (cliente.telefono != null && saldo > 0) {
+                    if (cliente.telefono != null && estado.saldo > 0) {
                         TextButton(
                             onClick = onRecordar,
                             modifier = Modifier.padding(top = 4.dp)
@@ -140,7 +174,7 @@ fun ClienteDetalleScreen(
 
             item { EncabezadoSeccion(titulo = "Movimientos de la cuenta") }
 
-            if (historial.isEmpty()) {
+            if (estado.historial.isEmpty()) {
                 item {
                     EstadoVacio(
                         titulo = "Sin movimientos todavía",
@@ -149,7 +183,7 @@ fun ClienteDetalleScreen(
                 }
             } else {
                 items(
-                    items = historial,
+                    items = estado.historial,
                     key = { entrada ->
                         when (entrada) {
                             is EntradaHistorial.DeFiado -> "f${entrada.fiado.id}"
@@ -165,6 +199,109 @@ fun ClienteDetalleScreen(
             item { Spacer(Modifier.height(32.dp)) }
         }
     }
+
+    val formulario = estado.formulario
+    if (formulario != null) {
+        HojaRegistro(
+            formulario = formulario,
+            saldoActual = estado.saldo,
+            onMontoCambia = onMontoCambia,
+            onDescripcionCambia = onDescripcionCambia,
+            onConfirmar = onConfirmar,
+            onCerrar = onCerrarHoja
+        )
+    }
+}
+
+/**
+ * La hoja inferior donde se registra el fiado o el abono.
+ *
+ * Es la misma hoja para las dos cosas, con los textos cambiados. Son
+ * el mismo gesto (escribir un monto) y duplicar el componente solo
+ * daría dos sitios donde arreglar el mismo error.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun HojaRegistro(
+    formulario: FormularioRegistro,
+    saldoActual: Long,
+    onMontoCambia: (Long?) -> Unit,
+    onDescripcionCambia: (String) -> Unit,
+    onConfirmar: () -> Unit,
+    onCerrar: () -> Unit
+) {
+    val colores = LocalColoresFiao.current
+    val estadoHoja = rememberModalBottomSheetState()
+    val esFiado = formulario.tipo == TipoRegistro.FIADO
+
+    ModalBottomSheet(
+        onDismissRequest = onCerrar,
+        sheetState = estadoHoja
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(18.dp)
+        ) {
+            Text(
+                text = if (esFiado) "Registrar un fiado" else "Registrar un abono",
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+
+            if (!esFiado) {
+                // Recordarle cuánto debe mientras escribe el abono
+                // evita el error más común: teclear de más.
+                Text(
+                    text = "Debe ${saldoActual.aPesos()}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = colores.fiado
+                )
+            }
+
+            CampoMonto(
+                valor = formulario.monto,
+                onValorCambia = onMontoCambia,
+                error = formulario.errorMonto,
+                imeAction = if (esFiado) ImeAction.Next else ImeAction.Done
+            )
+
+            if (esFiado) {
+                CampoTexto(
+                    valor = formulario.descripcion,
+                    onValorCambia = onDescripcionCambia,
+                    etiqueta = "¿Qué se llevó?",
+                    error = formulario.errorDescripcion,
+                    ayuda = "Por ejemplo: mercado, pañales, surtido",
+                    imeAction = ImeAction.Done
+                )
+            }
+
+            Button(
+                onClick = onConfirmar,
+                enabled = !formulario.guardando,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp)
+            ) {
+                if (formulario.guardando) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(22.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                } else {
+                    Text(
+                        text = if (esFiado) "Registrar fiado" else "Registrar abono",
+                        style = MaterialTheme.typography.labelLarge
+                    )
+                }
+            }
+        }
+    }
 }
 
 /**
@@ -172,8 +309,7 @@ fun ClienteDetalleScreen(
  *
  * El `when` sobre la sealed class no lleva `else`: el compilador sabe
  * que solo hay dos casos y, si mañana se agrega un tercero, marcará
- * error justo aquí. Es la ventaja de modelar con sealed en vez de con
- * un campo de texto.
+ * error justo aquí.
  */
 @Composable
 private fun FilaHistorial(entrada: EntradaHistorial) {
@@ -220,14 +356,22 @@ private fun FilaHistorial(entrada: EntradaHistorial) {
 private fun ClienteDetallePreview() {
     FiaoTheme {
         ClienteDetalleScreen(
-            cliente = DatosDemo.clientes[0].cliente,
-            saldo = DatosDemo.clientes[0].saldo,
-            historial = DatosDemo.historialCliente,
+            estado = ClienteDetalleUiState(
+                cargando = false,
+                cliente = Cliente(1, "Rosa Herrera", "3001234567"),
+                saldo = 85_000,
+                historial = DatosDemo.historialCliente
+            ),
             onVolver = {},
             onEditar = {},
             onFiar = {},
             onAbonar = {},
-            onRecordar = {}
+            onRecordar = {},
+            onMontoCambia = {},
+            onDescripcionCambia = {},
+            onConfirmar = {},
+            onCerrarHoja = {},
+            onMensajeMostrado = {}
         )
     }
 }

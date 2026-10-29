@@ -1,8 +1,13 @@
 package com.williammarrugo.fiao.ui.navegacion
 
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.net.Uri
+import android.widget.Toast
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
@@ -11,6 +16,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.williammarrugo.fiao.domain.model.DatosDemo
 import com.williammarrugo.fiao.ui.FabricaViewModels
 import com.williammarrugo.fiao.ui.clientes.ClienteDetalleScreen
 import com.williammarrugo.fiao.ui.clientes.ClienteDetalleViewModel
@@ -25,10 +31,9 @@ import com.williammarrugo.fiao.ui.movimientos.MovimientoFormViewModel
 import com.williammarrugo.fiao.ui.movimientos.MovimientosScreen
 import com.williammarrugo.fiao.ui.movimientos.MovimientosViewModel
 import com.williammarrugo.fiao.ui.resumen.ResumenScreen
-import com.williammarrugo.fiao.domain.model.DatosDemo
 
 /**
- * El grafo de navegación, ya conectado a la base de datos.
+ * El grafo de navegación, conectado a la base de datos.
  *
  * Este archivo es la costura entre dos mundos: arriba los ViewModel,
  * que saben de datos, y abajo las pantallas, que solo saben dibujar.
@@ -43,8 +48,7 @@ import com.williammarrugo.fiao.domain.model.DatosDemo
  * - `collectAsStateWithLifecycle()` suscribe la pantalla al StateFlow.
  *   La parte "WithLifecycle" importa: cuando la app pasa a segundo
  *   plano, deja de escuchar, y así no se gasta batería recalculando
- *   una pantalla que nadie ve. Es la versión correcta en Android de
- *   `collectAsState()`.
+ *   una pantalla que nadie ve.
  */
 @Composable
 fun FiaoNavHost(
@@ -134,23 +138,41 @@ fun FiaoNavHost(
         ) { entrada ->
             val vm: ClienteDetalleViewModel = viewModel(factory = FabricaViewModels.Factory)
             val estado by vm.uiState.collectAsStateWithLifecycle()
-            val cliente = estado.cliente
             val id = entrada.arguments?.getLong(Rutas.ARG_CLIENTE_ID) ?: 0L
+            val context = LocalContext.current
 
-            // Mientras la consulta no responde, cliente es null. No se
-            // dibuja nada en vez de inventar un cliente vacío.
-            if (cliente != null) {
-                ClienteDetalleScreen(
-                    cliente = cliente,
-                    saldo = estado.saldo,
-                    historial = estado.historial,
-                    onVolver = { navController.popBackStack() },
-                    onEditar = { navController.navigate(Rutas.clienteForm(id)) },
-                    onFiar = { /* F7: pendiente */ },
-                    onAbonar = { /* F8: pendiente */ },
-                    onRecordar = { /* F12: pendiente */ }
-                )
-            }
+            ClienteDetalleScreen(
+                estado = estado,
+                onVolver = { navController.popBackStack() },
+                onEditar = { navController.navigate(Rutas.clienteForm(id)) },
+                onFiar = vm::abrirFiado,
+                onAbonar = vm::abrirAbono,
+                onRecordar = {
+                    // El ViewModel arma el texto y la URL; abrir la app
+                    // externa necesita un Context, y eso es trabajo de
+                    // la capa de interfaz. Un ViewModel con Context
+                    // adentro es una fuga de memoria esperando ocurrir.
+                    val enlace = vm.enlaceRecordatorio()
+                    if (enlace != null) {
+                        try {
+                            context.startActivity(
+                                Intent(Intent.ACTION_VIEW, Uri.parse(enlace))
+                            )
+                        } catch (e: ActivityNotFoundException) {
+                            Toast.makeText(
+                                context,
+                                "No hay una app para abrir WhatsApp",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                    }
+                },
+                onMontoCambia = vm::cambiarMonto,
+                onDescripcionCambia = vm::cambiarDescripcion,
+                onConfirmar = vm::confirmar,
+                onCerrarHoja = vm::cerrarHoja,
+                onMensajeMostrado = vm::mensajeMostrado
+            )
         }
 
         composable(

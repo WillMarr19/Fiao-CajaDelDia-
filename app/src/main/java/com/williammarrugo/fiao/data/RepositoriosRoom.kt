@@ -8,9 +8,11 @@ import com.williammarrugo.fiao.domain.model.Abono
 import com.williammarrugo.fiao.domain.model.Cliente
 import com.williammarrugo.fiao.domain.model.ClienteConSaldo
 import com.williammarrugo.fiao.domain.model.EntradaHistorial
+import com.williammarrugo.fiao.domain.model.Fiado
 import com.williammarrugo.fiao.domain.model.Movimiento
 import com.williammarrugo.fiao.domain.repository.AbonoRepository
 import com.williammarrugo.fiao.domain.repository.ClienteRepository
+import com.williammarrugo.fiao.domain.repository.FiadoRepository
 import com.williammarrugo.fiao.domain.repository.MovimientoRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -123,6 +125,17 @@ class ClienteRepositoryRoom(
     override suspend fun eliminar(id: Long) = clienteDao.eliminar(id)
 }
 
+class FiadoRepositoryRoom(
+    private val dao: FiadoDao
+) : FiadoRepository {
+
+    override fun observarPorCliente(clienteId: Long): Flow<List<Fiado>> =
+        dao.observarPorCliente(clienteId).map { lista -> lista.map { it.aDominio() } }
+
+    override suspend fun insertar(fiado: Fiado): Long =
+        dao.insertar(fiado.aEntidad())
+}
+
 class AbonoRepositoryRoom(
     private val dao: AbonoDao
 ) : AbonoRepository {
@@ -132,6 +145,9 @@ class AbonoRepositoryRoom(
         return dao.observarEntre(desde, hasta)
             .map { lista -> lista.map { it.aDominio() } }
     }
+
+    override fun observarPorCliente(clienteId: Long): Flow<List<Abono>> =
+        dao.observarPorCliente(clienteId).map { lista -> lista.map { it.aDominio() } }
 
     override suspend fun insertar(abono: Abono): Long =
         dao.insertar(abono.aEntidad())
